@@ -37,7 +37,7 @@ type K8sProvider struct {
 
 // Metadata returns the provider type name.
 func (p *K8sProvider) Metadata(ctx context.Context, request provider.MetadataRequest, response *provider.MetadataResponse) {
-	response.TypeName = "k8scrd"
+	response.TypeName = "custom-resource"
 	response.Version = p.version
 }
 
@@ -100,7 +100,7 @@ func (p *K8sProvider) Configure(ctx context.Context, request provider.ConfigureR
 			path.Root("host"),
 			"Unknown Kubernetes API Server host",
 			"The provider cannot create the Kubernetes API client as there is an unknown configuration value for the API Server endpoint. "+
-				"Set the value statically in the configuration, or use the K8SCRD_HOST environment variable.",
+				"Set the value statically in the configuration, or use the K8S_HOST environment variable.",
 		)
 	}
 
@@ -108,7 +108,7 @@ func (p *K8sProvider) Configure(ctx context.Context, request provider.ConfigureR
 		response.Diagnostics.AddError(
 			"Unknown Kubernetes API Server credentials",
 			"The provider cannot create the Kubernetes API client as there are no valid credentials specified. "+
-				"Statically set the value of either the token, or the username and password combination, in the configuration, or use the K8SCRD_TOKEN, K8SCRD_USERNAME and K8SCRD_PASSWORD environment variables.",
+				"Statically set the value of either the token, or the username and password combination, in the configuration, or use the K8S_TOKEN, K8S_USERNAME and K8S_PASSWORD environment variables.",
 		)
 	}
 
@@ -116,10 +116,10 @@ func (p *K8sProvider) Configure(ctx context.Context, request provider.ConfigureR
 		return
 	}
 
-	host := os.Getenv("K8SCRD_HOST")
-	token := os.Getenv("K8SCRD_TOKEN")
-	username := os.Getenv("K8SCRD_USERNAME")
-	password := os.Getenv("K8SCRD_PASSWORD")
+	host := os.Getenv("K8S_HOST")
+	token := os.Getenv("K8S_TOKEN")
+	username := os.Getenv("K8S_USERNAME")
+	password := os.Getenv("K8S_PASSWORD")
 
 	if !model.Host.IsNull() {
 		host = model.Host.ValueString()
@@ -142,7 +142,7 @@ func (p *K8sProvider) Configure(ctx context.Context, request provider.ConfigureR
 			path.Root("host"),
 			"Missing Kubernetes API Server host",
 			"The provider cannot create the Kubernetes API client as there is a missing or empty value for the API Server host. "+
-				"Set the endpoint value in the configuration or use the K8SCRD_ENDPOINT environment variable. "+
+				"Set the endpoint value in the configuration or use the K8S_ENDPOINT environment variable. "+
 				"If either is already set, ensure the value is not empty.",
 		)
 	}
@@ -151,8 +151,8 @@ func (p *K8sProvider) Configure(ctx context.Context, request provider.ConfigureR
 		response.Diagnostics.AddError(
 			"Missing Kubernetes API Server credentials",
 			"The provider cannot create the Kubernetes API client as there is a missing or empty value for the API Server credentials. "+
-				"Set the token value, or a valid username/password combination in the configuration or use the K8SCRD_TOKEN, "+
-				"K8SCRD_USERNAME and K8SCRD_PASSWORD environment variables. "+
+				"Set the token value, or a valid username/password combination in the configuration or use the K8S_TOKEN, "+
+				"K8S_USERNAME and K8S_PASSWORD environment variables. "+
 				"If either is already set, ensure the values are not empty.",
 		)
 	}
@@ -175,7 +175,8 @@ func (p *K8sProvider) Configure(ctx context.Context, request provider.ConfigureR
 // Resources defines the resources implemented in the provider.
 func (p *K8sProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewCRDInstanceResource,
+		NewCustomResourceDefinition,
+		NewCustomResourceInstance,
 	}
 }
 

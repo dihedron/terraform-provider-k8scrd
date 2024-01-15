@@ -1,19 +1,19 @@
 terraform {
   required_providers {
-    k8scrd = {
-      source = "dihedron.org/terraform/k8scrd"
+    custom-resource = {
+      source = "dihedron.org/terraform/custom-resource"
     }
   }
 }
 
 
-provider "k8scrd" {
+provider "custom-resource" {
   host = "https://myendpoint.example.com/api"
   token = "12345567890ABCDEF"
   # example configuration here
 }
 
-resource "k8scrd_instance" "crontab_crd" {
+resource "custom-resource_definition" "crontab_crd" {
   attributes = {
     name = "crontabs.stable.example.com"
     version = "v1"
@@ -65,7 +65,7 @@ resource "k8scrd_instance" "crontab_crd" {
     EOT
 }
 
-resource "k8scrd_instance" "crontab_object_1" {
+resource "custom-resource_instance" "crontab_object_1" {
   attributes = {
     kind = "crontabs.stable.example.com"
     name = "my-new-cron-object-1"

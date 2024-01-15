@@ -1,16 +1,14 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package provider
 
 import (
 	"bytes"
 	"context"
 	"fmt"
+	"html/template"
 	"io"
 	"os/exec"
-	"text/template"
 
+	"github.com/Masterminds/sprig/v3"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -21,35 +19,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// Ensure provider defined types fully satisfy framework interfaces.
-var (
-	_ resource.Resource = &CRDInstanceResource{}
-	//_ resource.ResourceWithImportState = &CRDInstanceResource{} // TODO: do we import a state?
-	_ resource.ResourceWithConfigure = &CRDInstanceResource{} // TODO: do we reconfigure?
-)
-
-func NewCRDInstanceResource() resource.Resource {
-	return &CRDInstanceResource{}
-}
-
-// CRDInstanceResource defines the resource implementation.
-type CRDInstanceResource struct {
+type KubectlResource struct {
 	configuration *K8sProviderConfiguration
 }
 
-// CRDInstanceResourceModel describes the resource data model.
-type CRDInstanceResourceModel struct {
+type KubectlResourceModel struct {
 	Attributes types.Map    `tfsdk:"attributes"`
 	Template   types.String `tfsdk:"template"`
 	Applied    types.String `tfsdk:"applied"`
 	Id         types.String `tfsdk:"id"`
 }
 
-func (r *CRDInstanceResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_instance"
-}
-
-func (r *CRDInstanceResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *KubectlResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		// This description is used by the documentation generator and the language server.
 		MarkdownDescription: "Resource instance created according to a registered Custom Resource Definition (CRD)",
@@ -79,7 +60,7 @@ func (r *CRDInstanceResource) Schema(ctx context.Context, req resource.SchemaReq
 	}
 }
 
-func (r *CRDInstanceResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *KubectlResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -99,9 +80,9 @@ func (r *CRDInstanceResource) Configure(ctx context.Context, req resource.Config
 }
 
 // Create creates the resource by running kubectl apply.
-func (r *CRDInstanceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *KubectlResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
-	var model CRDInstanceResourceModel
+	var model KubectlResourceModel
 
 	// read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &model)...)
@@ -120,8 +101,8 @@ func (r *CRDInstanceResource) Create(ctx context.Context, req resource.CreateReq
 }
 
 // Read does nothing really.
-func (r *CRDInstanceResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data CRDInstanceResourceModel
+func (r *KubectlResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data KubectlResourceModel
 
 	// read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -135,8 +116,8 @@ func (r *CRDInstanceResource) Read(ctx context.Context, req resource.ReadRequest
 }
 
 // Update re-runs kubectl apply with the whole file and relies on Kubernetes to perform all the necessary diffs.
-func (r *CRDInstanceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var model CRDInstanceResourceModel
+func (r *KubectlResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var model KubectlResourceModel
 
 	// read Terraform plan model into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &model)...)
@@ -154,8 +135,8 @@ func (r *CRDInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 	resp.Diagnostics.Append(resp.State.Set(ctx, &model)...)
 }
 
-func (r *CRDInstanceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data CRDInstanceResourceModel
+func (r *KubectlResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data KubectlResourceModel
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -173,15 +154,15 @@ func (r *CRDInstanceResource) Delete(ctx context.Context, req resource.DeleteReq
 	// }
 }
 
-func (r *CRDInstanceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *KubectlResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (r *CRDInstanceResource) createOrUpdate(ctx context.Context, model *CRDInstanceResourceModel, diagnostics *diag.Diagnostics) {
+func (r *KubectlResource) createOrUpdate(ctx context.Context, model *KubectlResourceModel, diagnostics *diag.Diagnostics) {
 
 	tflog.Debug(ctx, "creating new CRD resource")
 
-	tmpl, err := template.New("crd").Parse(model.Template.ValueString())
+	tmpl, err := template.New("crd").Funcs(sprig.FuncMap()).Parse(model.Template.ValueString())
 	if err != nil {
 		//return err
 		diagnostics.AddError(
@@ -218,9 +199,9 @@ func (r *CRDInstanceResource) createOrUpdate(ctx context.Context, model *CRDInst
 
 	var cmd *exec.Cmd
 	if r.configuration.Token != "" {
-		cmd = exec.Command("/data/workspaces/gomods/terraform-provider-k8scrd/examples/kubectl/kubectl", "apply", "--server", r.configuration.Host, "--token", r.configuration.Token, "--output", "json")
+		cmd = exec.Command("/data/workspaces/gomods/terraform-provider-custom-resource/examples/kubectl/kubectl", "apply", "--server", r.configuration.Host, "--token", r.configuration.Token, "--output", "json")
 	} else if r.configuration.Username != "" && r.configuration.Password != "" {
-		cmd = exec.Command("/data/workspaces/gomods/terraform-provider-k8scrd/examples/kubectl/kubectl", "apply", "--server", r.configuration.Host, "--username", r.configuration.Username, "--password", r.configuration.Password, "--output", "json")
+		cmd = exec.Command("/data/workspaces/gomods/terraform-provider-custom-resource/examples/kubectl/kubectl", "apply", "--server", r.configuration.Host, "--username", r.configuration.Username, "--password", r.configuration.Password, "--output", "json")
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

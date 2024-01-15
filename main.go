@@ -8,7 +8,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/dihedron/terraform-provider-k8scrd/internal/provider"
+	"github.com/dihedron/terraform-provider-custom-resource/internal/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
@@ -39,7 +39,7 @@ func main() {
 
 	opts := providerserver.ServeOpts{
 		// TODO: Update this string with the published name of your provider.
-		Address: "dihedron.org/terraform/k8scrd",
+		Address: "dihedron.org/terraform/custom-resource",
 		Debug:   debug,
 	}
 
